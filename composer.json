@@ -27,6 +27,8 @@
         "psr-4": {
             "App\\": "app/",
             "Auth\\": "app/Grpc/Generated/Auth/",
+            "Catalog\\": "app/Grpc/Generated/Catalog/",
+            "Orders\\": "app/Grpc/Generated/Orders/",
             "GPBMetadata\\": "app/Grpc/Generated/GPBMetadata/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"

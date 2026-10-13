@@ -1,0 +1,13 @@
+@extends('layouts.admin', ['title' => 'Orders'])
+
+@section('content')
+    <section><p class="text-sm text-slate-500">Customer orders</p><h2 class="mt-1 text-2xl font-semibold">Orders</h2></section>
+    <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white"><form method="GET" class="flex flex-wrap gap-3 border-b border-slate-100 p-4"><input class="form-input max-w-xs" name="user_id" value="{{ request('user_id') }}" placeholder="Customer UUID"><select class="form-input max-w-xs" name="status"><option value="">Any status</option>@foreach ($statuses as $status)<option value="{{ $status }}" @selected(request('status') === $status)>{{ $status }}</option>@endforeach</select><input class="form-input max-w-xs" type="date" name="created_after" value="{{ request('created_after') }}"><input class="form-input max-w-xs" type="date" name="created_before" value="{{ request('created_before') }}"><button class="secondary-button" type="submit">Filter</button></form>
+        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-100 text-left text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-5 py-3">Order</th><th class="px-5 py-3">Customer</th><th class="px-5 py-3">Status</th><th class="px-5 py-3">Total</th><th class="px-5 py-3">Created</th><th class="px-5 py-3"></th></tr></thead><tbody class="divide-y divide-slate-100">
+        @forelse ($orders as $order)
+            <tr><td class="px-5 py-4 font-mono text-xs">{{ $order['id'] }}</td><td class="px-5 py-4 font-mono text-xs">{{ $order['user_id'] }}</td><td class="px-5 py-4">{{ $order['status'] }}</td><td class="px-5 py-4">{{ $order['currency'] }} {{ number_format(($order['total_minor'] ?? 0) / 100, 2) }}</td><td class="px-5 py-4">{{ $order['created_at'] }}</td><td class="px-5 py-4 text-right"><a class="text-indigo-600" href="{{ route('admin.orders.show', $order['id']) }}">View</a></td></tr>
+        @empty
+            <tr><td class="px-5 py-8 text-center text-slate-500" colspan="6">No orders found.</td></tr>
+        @endforelse
+    </tbody></table></div>@if ($nextPageToken !== '')<form class="border-t border-slate-100 p-4 text-right" method="GET" action="{{ route('admin.orders.index') }}"><input type="hidden" name="user_id" value="{{ request('user_id') }}"><input type="hidden" name="status" value="{{ request('status') }}"><input type="hidden" name="created_after" value="{{ request('created_after') }}"><input type="hidden" name="created_before" value="{{ request('created_before') }}"><input type="hidden" name="page_token" value="{{ $nextPageToken }}"><button class="secondary-button" type="submit">Next page →</button></form>@endif</section>
+@endsection

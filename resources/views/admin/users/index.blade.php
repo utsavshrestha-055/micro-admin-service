@@ -3,6 +3,7 @@
 @section('content')
     <section class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><p class="text-sm text-slate-500">Identity and access</p><h2 class="mt-1 text-2xl font-semibold tracking-tight">Users</h2></div>
+        <a class="primary-button" href="{{ route('admin.users.create') }}">Create user</a>
         <div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Directory provided by Auth Service</div>
     </section>
     <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/30">

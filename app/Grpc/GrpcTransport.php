@@ -18,15 +18,32 @@ use Auth\ListRolePermissionsRequest;
 use Auth\ListUserRolesRequest;
 use Auth\ListUsersRequest;
 use Auth\LoginRequest;
+use Auth\RegisterRequest;
 use Auth\RolePermissionRequest;
 use Auth\UnassignRoleRequest;
 use Auth\UpdatePermissionRequest;
 use Auth\UpdateRoleRequest;
 use Auth\UpdateUserRequest;
+use Catalog\CategoryId;
+use Catalog\CategoryInput;
+use Catalog\CategoryServiceClient;
+use Catalog\ImageId;
+use Catalog\PageRequest;
+use Catalog\ProductDetailsInput;
+use Catalog\ProductId;
+use Catalog\ProductImageInput;
+use Catalog\ProductImageServiceClient;
+use Catalog\ProductInput;
+use Catalog\ProductListRequest;
+use Catalog\ProductServiceClient;
 use Google\Protobuf\Internal\Message;
 use Grpc\ChannelCredentials;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Orders\GetOrderAdminRequest;
+use Orders\ListOrdersAdminRequest;
+use Orders\OrderServiceClient;
+use Orders\UpdateOrderStatusRequest;
 use RuntimeException;
 
 class GrpcTransport
@@ -35,12 +52,21 @@ class GrpcTransport
 
     private ?AuthorizationServiceClient $authorizationClient = null;
 
+    private ?CategoryServiceClient $categoryClient = null;
+
+    private ?ProductServiceClient $productClient = null;
+
+    private ?ProductImageServiceClient $productImageClient = null;
+
+    private ?OrderServiceClient $orderClient = null;
+
     public function __construct(private ProtobufJsonMapper $jsonMapper) {}
 
     /** @var array<string, class-string<Message>> */
     private const REQUEST_TYPES = [
         'AuthenticationService.HealthCheck' => HealthCheckRequest::class,
         'AuthenticationService.Login' => LoginRequest::class,
+        'AuthenticationService.Register' => RegisterRequest::class,
         'AuthenticationService.Logout' => AccessTokenRequest::class,
         'AuthenticationService.GetUser' => GetUserRequest::class,
         'AuthenticationService.ListUsers' => ListUsersRequest::class,
@@ -61,6 +87,27 @@ class GrpcTransport
         'AuthorizationService.ListRolePermissions' => ListRolePermissionsRequest::class,
         'AuthorizationService.GrantPermissionToRole' => RolePermissionRequest::class,
         'AuthorizationService.RevokePermissionFromRole' => RolePermissionRequest::class,
+        'CategoryService.CreateCategory' => CategoryInput::class,
+        'CategoryService.GetCategory' => CategoryId::class,
+        'CategoryService.ListCategories' => PageRequest::class,
+        'CategoryService.UpdateCategory' => CategoryInput::class,
+        'CategoryService.DeleteCategory' => CategoryId::class,
+        'ProductService.CreateProduct' => ProductInput::class,
+        'ProductService.GetProduct' => ProductId::class,
+        'ProductService.ListProducts' => ProductListRequest::class,
+        'ProductService.UpdateProduct' => ProductInput::class,
+        'ProductService.DeleteProduct' => ProductId::class,
+        'ProductService.CreateProductDetails' => ProductDetailsInput::class,
+        'ProductService.UpdateProductDetails' => ProductDetailsInput::class,
+        'ProductService.DeleteProductDetails' => ProductId::class,
+        'ProductService.GetProductPage' => ProductId::class,
+        'ProductImageService.CreateProductImage' => ProductImageInput::class,
+        'ProductImageService.UpdateProductImage' => ProductImageInput::class,
+        'ProductImageService.DeleteProductImage' => ImageId::class,
+        'ProductImageService.GetProductImageData' => ImageId::class,
+        'OrderService.GetOrderAdmin' => GetOrderAdminRequest::class,
+        'OrderService.ListOrdersAdmin' => ListOrdersAdminRequest::class,
+        'OrderService.UpdateOrderStatus' => UpdateOrderStatusRequest::class,
     ];
 
     /**
@@ -77,7 +124,7 @@ class GrpcTransport
             $requestType = self::REQUEST_TYPES[$operation] ?? null;
 
             if ($requestType === null) {
-                throw new RuntimeException('The requested authentication service operation is not supported.');
+                throw new RuntimeException('The requested gRPC operation is not supported.');
             }
 
             $client = $this->client($service);
@@ -89,7 +136,10 @@ class GrpcTransport
                 $metadata['authorization'] = ['Bearer '.$accessToken];
             }
 
-            $timeoutMicroseconds = (int) round((float) config('auth_service.timeout_seconds', 5) * 1_000_000);
+            $timeoutConfig = in_array($service, ['CategoryService', 'ProductService', 'ProductImageService', 'OrderService'], true)
+                ? 'commerce_service.timeout_seconds'
+                : 'auth_service.timeout_seconds';
+            $timeoutMicroseconds = (int) round((float) config($timeoutConfig, 5) * 1_000_000);
             [$response, $status] = $client->{$method}($requestMessage, $metadata, ['timeout' => $timeoutMicroseconds])->wait();
 
             if ($status->code !== 0) {
@@ -99,13 +149,13 @@ class GrpcTransport
             }
 
             if (! $response instanceof Message) {
-                throw new RuntimeException('The authentication service returned an invalid response.');
+                throw new RuntimeException('The gRPC service returned an invalid response.');
             }
 
             $decodedResponse = json_decode($response->serializeToJsonString(), true, flags: JSON_THROW_ON_ERROR);
 
             if (! is_array($decodedResponse)) {
-                throw new RuntimeException('The authentication service returned an invalid response.');
+                throw new RuntimeException('The gRPC service returned an invalid response.');
             }
 
             $normalizedResponse = $this->jsonMapper->normalizeResponse($decodedResponse);
@@ -125,36 +175,46 @@ class GrpcTransport
                 'exception_class' => $exception::class,
                 'cause_class' => $exception->getPrevious() !== null ? $exception->getPrevious()::class : null,
             ]);
-            throw new RuntimeException('The authentication service request failed.', previous: $exception);
+            throw new RuntimeException('The gRPC service request failed.', previous: $exception);
         }
     }
 
-    private function client(string $service): AuthenticationServiceClient|AuthorizationServiceClient
+    private function client(string $service): AuthenticationServiceClient|AuthorizationServiceClient|CategoryServiceClient|ProductServiceClient|ProductImageServiceClient|OrderServiceClient
     {
-        $host = config('auth_service.host');
+        $host = in_array($service, ['CategoryService', 'ProductService', 'ProductImageService', 'OrderService'], true)
+            ? config('commerce_service.host')
+            : config('auth_service.host');
 
         if (! is_string($host) || trim($host) === '') {
             throw new RuntimeException('The authentication service endpoint is not configured.');
         }
 
-        $options = ['credentials' => $this->channelCredentials()];
+        $options = ['credentials' => $this->channelCredentials($service)];
 
         return match ($service) {
             'AuthenticationService' => $this->authenticationClient ??= new AuthenticationServiceClient($host, $options),
             'AuthorizationService' => $this->authorizationClient ??= new AuthorizationServiceClient($host, $options),
-            default => throw new RuntimeException('The requested authentication service is not supported.'),
+            'CategoryService' => $this->categoryClient ??= new CategoryServiceClient($host, $options),
+            'ProductService' => $this->productClient ??= new ProductServiceClient($host, $options),
+            'ProductImageService' => $this->productImageClient ??= new ProductImageServiceClient($host, $options),
+            'OrderService' => $this->orderClient ??= new OrderServiceClient($host, $options),
+            default => throw new RuntimeException('The requested gRPC service is not supported.'),
         };
     }
 
-    private function channelCredentials(): ?ChannelCredentials
+    private function channelCredentials(string $service): ?ChannelCredentials
     {
-        if (! config('auth_service.tls.enabled')) {
+        $tlsConfig = in_array($service, ['CategoryService', 'ProductService', 'ProductImageService', 'OrderService'], true)
+            ? 'commerce_service.tls'
+            : 'auth_service.tls';
+
+        if (! config($tlsConfig.'.enabled')) {
             return ChannelCredentials::createInsecure();
         }
 
-        $caCertificate = config('auth_service.tls.ca_certificate');
-        $clientCertificate = config('auth_service.tls.client_certificate');
-        $clientKey = config('auth_service.tls.client_key');
+        $caCertificate = config($tlsConfig.'.ca_certificate');
+        $clientCertificate = config($tlsConfig.'.client_certificate');
+        $clientKey = config($tlsConfig.'.client_key');
 
         if ((is_string($clientCertificate) && $clientCertificate !== '') !== (is_string($clientKey) && $clientKey !== '')) {
             throw new RuntimeException('Both client certificate and client key must be configured for mutual TLS.');
@@ -227,7 +287,7 @@ class GrpcTransport
     /** @param array<string, class-string<\Throwable>|null> $context */
     private function logOperation(string $operation, string $requestId, float $startedAt, string $status, array $context = []): void
     {
-        Log::log($status === 'ok' ? 'info' : 'warning', 'Authentication service RPC completed.', [
+        Log::log($status === 'ok' ? 'info' : 'warning', 'gRPC service RPC completed.', [
             'operation' => $operation,
             'request_id' => $requestId,
             'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),

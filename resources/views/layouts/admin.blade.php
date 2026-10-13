@@ -33,7 +33,7 @@
                     <a href="{{ route('admin.'.$path.'.index') }}" @class(['nav-link', 'nav-link-active' => request()->is('admin/'.$path)])>
                         <span class="w-6 text-center text-lg" aria-hidden="true">{{ ['Products'=>'□','Categories'=>'▦','Merchants'=>'◉','Orders'=>'▤','Customers'=>'♧','Inventory'=>'▥','Reports'=>'↗','Settings'=>'⚙','Audit logs'=>'◷'][$label] }}</span>
                         <span>{{ $label }}</span>
-                        <span class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">API</span>
+                        @unless (in_array($path, ['products', 'categories', 'orders'], true))<span class="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">API</span>@endunless
                     </a>
                 @endforeach
             </nav>

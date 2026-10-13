@@ -4,6 +4,8 @@ namespace App\Services\Users;
 
 use App\Grpc\Clients\AuthenticationClient;
 use App\Grpc\Clients\AuthorizationClient;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class UserManagementService
 {
@@ -16,6 +18,30 @@ class UserManagementService
     public function listUsers(string $token, int $limit, int $offset): array
     {
         return $this->authenticationClient->listUsers($token, $limit, $offset);
+    }
+
+    /** @return array<string, mixed> */
+    public function createUser(string $email, string $password, string $firstName, string $lastName): array
+    {
+        $response = $this->authenticationClient->register($email, $password, $firstName, $lastName);
+        $createdUser = $response['user'] ?? null;
+        $createdUserToken = $response['access_token'] ?? null;
+
+        if (is_string($createdUserToken) && $createdUserToken !== '') {
+            try {
+                $this->authenticationClient->logout($createdUserToken);
+            } catch (RuntimeException $exception) {
+                Log::notice('The newly created user session could not be revoked.', [
+                    'reason' => class_basename($exception),
+                ]);
+            }
+        }
+
+        if (! is_array($createdUser) || ! isset($createdUser['id'], $createdUser['email'])) {
+            throw new RuntimeException('The authentication service returned an invalid registration response.');
+        }
+
+        return $createdUser;
     }
 
     /** @return array<string, mixed> */

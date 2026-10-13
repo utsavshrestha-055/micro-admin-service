@@ -46,6 +46,36 @@ class UserController extends Controller
         ]);
     }
 
+    public function create(): View
+    {
+        return view('admin.users.create');
+    }
+
+    public function store(Request $request, UserManagementService $userManagementService): RedirectResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['nullable', 'string', 'max:100'],
+            'password' => ['required', 'string', 'min:12', 'max:1024', 'confirmed'],
+        ]);
+
+        try {
+            $userManagementService->createUser(
+                $validated['email'],
+                $validated['password'],
+                $validated['first_name'],
+                $validated['last_name'] ?? '',
+            );
+        } catch (RuntimeException) {
+            return back()
+                ->withErrors(['user' => 'The user could not be created. Check whether the email is already registered.'])
+                ->withInput($request->except(['password', 'password_confirmation']));
+        }
+
+        return redirect()->route('admin.users.index')->with('status', 'User created.');
+    }
+
     public function show(Request $request, string $userId, UserManagementService $userManagementService): View
     {
         try {

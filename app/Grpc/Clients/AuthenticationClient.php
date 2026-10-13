@@ -18,6 +18,17 @@ class AuthenticationClient
     }
 
     /** @return array<string, mixed> */
+    public function register(string $email, string $password, string $firstName, string $lastName): array
+    {
+        return $this->transport->call('AuthenticationService', 'Register', [
+            'email' => $email,
+            'password' => $password,
+            'firstName' => $firstName,
+            'lastName' => $lastName,
+        ]);
+    }
+
+    /** @return array<string, mixed> */
     public function healthCheck(): array
     {
         return $this->transport->call('AuthenticationService', 'HealthCheck', []);

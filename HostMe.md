@@ -1,13 +1,13 @@
 # Run and host Commerce Admin
 
-This guide covers local development on macOS, Windows, and Linux, plus production hosting on Linux. Commerce Admin is a Laravel web app; the Rust authentication service is a separate service. The PHP app host needs network access to its gRPC endpoint.
+This guide covers local development on macOS, Windows, and Linux, plus production hosting on Linux. Commerce Admin is a Laravel web app that calls two separate Rust services: the auth service and the product service. The PHP app host needs network access to both gRPC endpoints.
 
 ## Requirements
 
 - PHP 8.3 or newer. This project was set up with PHP 8.4 on macOS.
 - Composer and the PHP `grpc` extension. The extension must be enabled in both CLI PHP and the PHP web runtime (PHP-FPM, Apache, or IIS).
 - Node.js and npm to install and build Vite assets.
-- Access to the auth service's gRPC endpoint; use TLS in hosted environments.
+- Access to the auth and product services' gRPC endpoints; use TLS in hosted environments.
 - `protoc` and `grpc_php_plugin` only when regenerating the checked-in clients. The generated PHP files are committed under `app/Grpc/Generated`.
 
 Laravel also needs its standard PHP extensions: Ctype, cURL, DOM, Fileinfo, Filter, Hash, Mbstring, OpenSSL, PCRE, PDO, Session, Tokenizer, and XML. Some are bundled with PHP; package names vary by OS. `composer check-platform-reqs` reports missing requirements.
@@ -52,7 +52,7 @@ cp .env.example .env
 php artisan key:generate
 ```
 
-Keep an existing `APP_KEY`; changing it invalidates encrypted sessions. Configure the auth service values in `.env`, using the hostname reachable from your Mac:
+Keep an existing `APP_KEY`; changing it invalidates encrypted sessions. Configure both gRPC service endpoints in `.env`, using hostnames reachable from your Mac:
 
 ```dotenv
 APP_ENV=local
@@ -62,13 +62,16 @@ AUTH_GRPC_HOST=auth.example.internal:50052
 AUTH_GRPC_TIMEOUT=5
 AUTH_GRPC_TLS=false
 AUTH_GRPC_PROTO_FILE=proto/auth.proto
+COMMERCE_GRPC_HOST=micro-product-service.batman:50062
+COMMERCE_GRPC_TIMEOUT=5
+COMMERCE_GRPC_TLS=false
 SESSION_DRIVER=file
 SESSION_ENCRYPT=true
 CACHE_STORE=file
 QUEUE_CONNECTION=sync
 ```
 
-For a TLS endpoint set `AUTH_GRPC_TLS=true` and configure `AUTH_GRPC_CA_CERT` if a custom CA is needed. For mutual TLS, also configure both `AUTH_GRPC_CLIENT_CERT` and `AUTH_GRPC_CLIENT_KEY`.
+The product-service host serves catalog, product image, and order RPCs; those APIs do not use separate host variables. For TLS, set the corresponding `AUTH_GRPC_TLS` and `COMMERCE_GRPC_TLS` values to `true` and configure `AUTH_GRPC_CA_CERT` and/or `COMMERCE_GRPC_CA_CERT` if a custom CA is needed. For mutual TLS, configure each service's matching client certificate and key variables as required.
 
 ### 3. Run locally
 
@@ -107,7 +110,7 @@ Copy-Item .env.example .env
 php artisan key:generate
 ```
 
-Set the same auth-service and session values as in the macOS example, using Windows-compatible paths for any certificate files. Run with `composer run dev`. PHP gRPC extension availability is the limiting dependency for native Windows hosting; use Linux for a production host.
+Set the same auth-service, product-service, and session values as in the macOS example, using Windows-compatible paths for any certificate files. Run with `composer run dev`. PHP gRPC extension availability is the limiting dependency for native Windows hosting; use Linux for a production host.
 
 ## Linux server hosting
 
@@ -161,6 +164,13 @@ AUTH_GRPC_CA_CERT=/run/secrets/auth-service-ca.pem
 # Configure both only if mutual TLS is required:
 # AUTH_GRPC_CLIENT_CERT=/run/secrets/admin-service.pem
 # AUTH_GRPC_CLIENT_KEY=/run/secrets/admin-service-key.pem
+COMMERCE_GRPC_HOST=product.internal.example:50062
+COMMERCE_GRPC_TIMEOUT=5
+COMMERCE_GRPC_TLS=true
+COMMERCE_GRPC_CA_CERT=/run/secrets/product-service-ca.pem
+# Configure both only if mutual TLS is required:
+# COMMERCE_GRPC_CLIENT_CERT=/run/secrets/admin-service.pem
+# COMMERCE_GRPC_CLIENT_KEY=/run/secrets/admin-service-key.pem
 SESSION_DRIVER=file
 SESSION_ENCRYPT=true
 SESSION_SECURE_COOKIE=true
@@ -172,7 +182,7 @@ Generate `APP_KEY` once with `php artisan key:generate --show`, store it in the 
 
 ### 3. Configure web serving and writable paths
 
-Point Nginx's document root at the app's `public/` directory and pass PHP requests to the matching PHP-FPM pool. Do not expose the project root. Terminate browser HTTPS at Nginx or a trusted load balancer and enable secure cookies. Keep outbound access from the host to the auth gRPC endpoint; use TLS and a trusted CA.
+Point Nginx's document root at the app's `public/` directory and pass PHP requests to the matching PHP-FPM pool. Do not expose the project root. Terminate browser HTTPS at Nginx or a trusted load balancer and enable secure cookies. Keep outbound access from the host to both gRPC endpoints; use TLS and a trusted CA.
 
 The PHP-FPM user must be able to write to `storage` and `bootstrap/cache`:
 
@@ -192,7 +202,7 @@ For the full Laravel server requirements and Nginx example, see [Laravel deploym
 
 ### 4. Start and verify
 
-Enable and start Nginx and PHP-FPM with the host's service manager. Check `/up`, the login page, the PHP web runtime's loaded gRPC extension, and connectivity to the configured auth endpoint. Successful login also requires an account granted `admin.dashboard.view`.
+Enable and start Nginx and PHP-FPM with the host's service manager. Check `/up`, the login page, the PHP web runtime's loaded gRPC extension, and connectivity to both configured gRPC endpoints. Successful login also requires an account granted `admin.dashboard.view`.
 
 ## Hosting notes
 
@@ -200,4 +210,5 @@ Enable and start Nginx and PHP-FPM with the host's service manager. Check `/up`,
 - Persist `storage/framework/sessions` and `storage/logs` across deployments if sessions and logs must survive release switches. For multiple web hosts, configure a shared session store instead of local files.
 - Deploy `app/Grpc/Generated`; production hosts do not need `protoc` or `grpc_php_plugin` unless regenerating the clients.
 - Permission checks are requested from the auth service on each protected request; there is no permission-check cache.
-- Commerce pages remain placeholders until their APIs are connected.
+- Product, category, image, and order pages use the product-service endpoint. Other commerce pages remain placeholders until their APIs are connected.
+- Uploaded product image bytes are stored by the product service. Apply its database migrations and deploy its updated gRPC API before enabling image uploads from this admin app.
