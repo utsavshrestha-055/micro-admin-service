@@ -1,56 +1,83 @@
 # Commerce Admin
 
-Laravel-based superadmin workspace for identity and access management through the Rust authentication service. The application has no local user, role, permission, session, queue, or cache database. The authentication service is the source of truth for identity and access records.
+Commerce Admin is a Laravel web application for administrators managing identity and access in the commerce platform. It provides a browser interface for users, roles, and permissions and delegates authentication and authorization to the separate Rust auth service.
 
-## Requirements
+The application is an administration shell, not the source of commerce data. Product, category, merchant, order, customer, inventory, reporting, settings, and audit-log pages are permission-protected placeholders until their respective services are connected.
 
-- PHP 8.3 or newer and Composer
-- Node.js and npm for compiling the Tailwind/Vite assets
-- `grpcurl` on the server running Laravel
-- PHP `proc_open` enabled for the bounded `grpcurl` subprocess
-- The checked-in `proto/auth.proto` contract
-- Network access from Laravel to the Rust gRPC proxy
+## What it provides
 
-The PHP gRPC and protobuf extensions are not required by this transport. The clients invoke the verified protobuf methods using `grpcurl`; request JSON is written to the subprocess standard input, so tokens and passwords are not included in its command line.
+- Login and logout through the external Authentication service.
+- User browsing, editing, deletion, and role assignment through the auth APIs.
+- Role and permission management through the Authorization service.
+- Per-route permission checks against the Authorization service.
+- A dashboard with an auth-service health status.
+- Placeholder pages for commerce areas that do not yet have connected APIs.
 
-## Local setup
+## How it is structured
+
+The browser communicates with Laravel over HTTP. Laravel keeps the opaque access token and a small user profile in an encrypted server-side session. For backend operations, `GrpcTransport` calls generated PHP clients over gRPC; the token is sent as authorization metadata and is also included in request messages where the checked-in proto defines that field.
+
+`proto/auth.proto` is the RPC contract. Generated messages and service clients live under `app/Grpc/Generated`. The handwritten adapters in `app/Grpc/Clients` and services in `app/Services` keep controllers independent of gRPC details. Permission checks are made per request; the app does not cache them.
+
+The auth service is the source of truth for users, roles, permissions, and access tokens. This app has no configured database connection and does not require database migrations. Sessions, cache, and queues use local file, file, and synchronous drivers by default.
+
+## Technology and requirements
+
+- Laravel 13 and PHP 8.3 or newer (PHP 8.4 is used in the documented macOS setup).
+- PHP `grpc` extension, Composer packages `grpc/grpc` and `google/protobuf`.
+- Node.js and npm to build the Vite/Tailwind assets.
+- Network access from the web host to the Rust auth service's gRPC endpoint.
+- `protoc` and `grpc_php_plugin` only when regenerating stubs.
+
+Platform-specific local setup and Linux hosting steps are documented in [HostMe.md](HostMe.md). PHP gRPC is officially supported on Linux and macOS; Windows users should use WSL2 or Docker unless a compatible native extension is available.
+
+## Local development
+
+See [HostMe.md](HostMe.md) for macOS, Windows, and Linux setup, local run steps, and Linux host deployment process.
+
+Quick start after PHP, Composer, Node.js, and `ext-grpc` are installed:
 
 ```sh
 composer install
 cp .env.example .env
 php artisan key:generate
-npm install
+npm ci
 npm run build
 ```
 
-Configure the values in `.env` for the local service. The default local example uses plaintext gRPC for the described Nginx proxy. Production deployments must enable TLS and use a trusted CA; configure mutual TLS certificates when the proxy requires client authentication.
+Set `AUTH_GRPC_HOST` and the other auth-service values in `.env`, then run:
 
-```dotenv
-AUTH_GRPC_HOST=micro-auth-service.batman:50052
-GRPCURL_BINARY=grpcurl
-AUTH_GRPC_TIMEOUT=5
-AUTH_GRPC_CONNECT_TIMEOUT=2
-AUTH_GRPC_TLS=false
-SESSION_DRIVER=file
-SESSION_ENCRYPT=true
-CACHE_STORE=file
-QUEUE_CONNECTION=sync
+```sh
+composer run dev
 ```
 
-Do not set `DB_CONNECTION`, and do not run database migrations. The runtime has no configured database connection. The starter SQLite file is left untouched on disk and is not read by this application. File sessions are encrypted; set `SESSION_SECURE_COOKIE=true` when serving HTTPS if `APP_ENV` is not `production`.
+The local UI defaults to `http://localhost:8000`.
 
-Run the development server with `composer run dev`. The UI is available at the configured `APP_URL`.
+## Configuration
 
-## Authentication and authorization
+The key gRPC settings are:
 
-Login uses `AuthenticationService.Login`. The opaque access token remains in Laravel’s encrypted server-side session. Each protected route checks its required permission through `AuthorizationService.CheckPermission`; a denied check returns 403, and an unavailable authorization service returns 503. Expired tokens are cleared and sent back to login. Logout attempts the service RPC and always clears the local session.
+| Setting | Purpose |
+| --- | --- |
+| `AUTH_GRPC_HOST` | Auth service hostname and port, such as `auth.internal:50052`. |
+| `AUTH_GRPC_TIMEOUT` | Per-call timeout in seconds. |
+| `AUTH_GRPC_TLS` | Enable TLS; use `true` on production hosts. |
+| `AUTH_GRPC_CA_CERT` | Optional trusted CA certificate path. |
+| `AUTH_GRPC_CLIENT_CERT` / `AUTH_GRPC_CLIENT_KEY` | Optional mutual-TLS client certificate and key. Configure both together. |
+| `AUTH_GRPC_PROTO_FILE` | Proto path used by the stub-generation target; defaults to `proto/auth.proto`. |
 
-User, role, and permission records are read and changed only through their service RPCs. The users search filters the current page because `ListUsers` exposes offset pagination but has no server-side search field. Commerce pages are protected placeholders; they show no fabricated metrics and require dedicated commerce APIs before operational behavior can be added.
+The local `.env.example` uses plaintext gRPC for the development proxy. Production should use TLS and a trusted CA; enable mutual TLS if the service requires it. Do not commit `.env`, access tokens, or certificate/key material.
 
-The version-controlled permission catalog also includes commerce capability names for future services. Creating those permission records does not create commerce functionality or authorize a commerce API that is not connected.
+Regenerate the checked-in PHP clients after changing the proto contract:
 
-## Service integration notes
+```sh
+make grpc-stubs
+```
 
-- `proto/auth.proto` is copied from the sibling auth-service checkout and defines the RPC request/response fields used by the clients.
-- `app/Grpc/Clients/` contains separate Authentication and Authorization clients; `GrpcurlTransport` applies per-call deadlines, TLS options, and structured logging without credentials.
-- The Rust service endpoint was not reachable from the development environment during implementation. Confirm network routing and TLS settings before using the UI against a deployed service.
+Override the compiler or plugin locations with `PROTOC_BINARY` and `GRPC_PHP_PLUGIN_BINARY` if they are not on `PATH`.
+
+## Authentication behavior
+
+Login calls `AuthenticationService.Login`, stores the resulting token in the Laravel session, then checks `admin.dashboard.view`. Protected routes ask `AuthorizationService.CheckPermission` for their required permission. A denied permission returns 403; an expired/unauthenticated token clears the session and redirects to login; service availability failures return 503. Logout attempts remote token revocation and always clears the local session.
+
+For route details, see `routes/web.php`. The `/up` health route is provided by Laravel. Application and RPC logs are written under `storage/logs` by the default local logging configuration.

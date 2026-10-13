@@ -3,7 +3,7 @@
 namespace Tests\Unit\Grpc\Clients;
 
 use App\Grpc\Clients\AuthorizationClient;
-use App\Grpc\GrpcurlTransport;
+use App\Grpc\GrpcTransport;
 use Mockery;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 use PHPUnit\Framework\TestCase;
@@ -14,7 +14,7 @@ class AuthorizationClientTest extends TestCase
 
     public function test_role_update_uses_camel_case_proto_json_fields(): void
     {
-        $transport = Mockery::mock(GrpcurlTransport::class);
+        $transport = Mockery::mock(GrpcTransport::class);
         $transport->shouldReceive('call')
             ->once()
             ->with('AuthorizationService', 'UpdateRole', [

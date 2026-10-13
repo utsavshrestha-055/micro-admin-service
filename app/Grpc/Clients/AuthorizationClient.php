@@ -2,11 +2,11 @@
 
 namespace App\Grpc\Clients;
 
-use App\Grpc\GrpcurlTransport;
+use App\Grpc\GrpcTransport;
 
 class AuthorizationClient
 {
-    public function __construct(private GrpcurlTransport $transport) {}
+    public function __construct(private GrpcTransport $transport) {}
 
     /** @return array<string, mixed> */
     public function checkPermission(string $accessToken, string $permission): array

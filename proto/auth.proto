@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package auth;
 
+option php_namespace = "Auth";
+
 service AuthenticationService {
     rpc HealthCheck(HealthCheckRequest)
         returns (HealthCheckResponse);
