@@ -54,8 +54,11 @@ class RoleController extends Controller
             : redirect()->route('admin.roles.index')->with('status', 'Role created.');
     }
 
-    public function sync(Request $request, RoleManagementService $roleManagementService): RedirectResponse
-    {
+    public function sync(
+        Request $request,
+        RoleManagementService $roleManagementService,
+        CustomerRoleSeeder $customerRoleSeeder,
+    ): RedirectResponse {
         try {
             $token = $this->accessToken($request);
             $existingRoles = $roleManagementService->listRoles($token)['roles'] ?? [];
@@ -84,39 +87,25 @@ class RoleController extends Controller
                     $updated++;
                 }
             }
+
+            $customerAccess = $customerRoleSeeder->synchronize($token);
         } catch (RuntimeException) {
-            return back()->withErrors(['role' => 'Application roles could not be synchronized. Please try again.']);
+            return back()->withErrors([
+                'role' => 'Application roles and customer access could not be synchronized. Sync application permissions first, then try again.',
+            ]);
         }
 
         $unchanged = count(self::APPLICATION_ROLES) - $created - $updated;
 
         return redirect()->route('admin.roles.index')->with(
             'status',
-            "Application roles synchronized. Created: {$created}; updated: {$updated}; unchanged: {$unchanged}.",
-        );
-    }
-
-    public function syncCustomer(Request $request, CustomerRoleSeeder $customerRoleSeeder): RedirectResponse
-    {
-        try {
-            $result = $customerRoleSeeder->synchronize($this->accessToken($request));
-        } catch (RuntimeException) {
-            return back()->withErrors([
-                'role' => 'Customer role access could not be synchronized. Re-run the sync after checking authorization service access.',
-            ]);
-        }
-
-        return redirect()->route('admin.roles.index')->with(
-            'status',
             sprintf(
-                'Customer access synchronized. Permissions created: %d; updated: %d; unchanged: %d. Role created: %s; updated: %s. Grants added: %d; removed: %d.',
-                $result['permissions_created'],
-                $result['permissions_updated'],
-                $result['permissions_unchanged'],
-                $result['role_created'] ? 'yes' : 'no',
-                $result['role_updated'] ? 'yes' : 'no',
-                $result['grants_added'],
-                $result['grants_removed'],
+                'Application roles synchronized. Created: %d; updated: %d; unchanged: %d. Customer grants added: %d; removed: %d.',
+                $created,
+                $updated,
+                $unchanged,
+                $customerAccess['grants_added'],
+                $customerAccess['grants_removed'],
             ),
         );
     }

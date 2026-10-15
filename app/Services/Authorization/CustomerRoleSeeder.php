@@ -16,10 +16,9 @@ class CustomerRoleSeeder
         private RoleManagementService $roleManagementService,
     ) {}
 
-    /** @return array{permissions_created: int, permissions_updated: int, permissions_unchanged: int, role_created: bool, role_updated: bool, grants_added: int, grants_removed: int} */
+    /** @return array{role_created: bool, role_updated: bool, grants_added: int, grants_removed: int} */
     public function synchronize(string $token): array
     {
-        $permissionCounts = $this->synchronizePermissions($token);
         $role = $this->synchronizeRole($token);
         $roleId = $role['id'] ?? null;
 
@@ -36,7 +35,7 @@ class CustomerRoleSeeder
             ->values();
 
         if ($desiredPermissionIds->count() !== count($this->permissionCatalog->customerPermissions())) {
-            throw new RuntimeException('The authorization service did not return every customer permission.');
+            throw new RuntimeException('Customer permissions are missing. Synchronize application permissions before application roles.');
         }
 
         $currentPermissionIds = collect(
@@ -55,42 +54,11 @@ class CustomerRoleSeeder
             $grantsRemoved++;
         }
 
-        return $permissionCounts + [
+        return [
             'role_created' => $role['created'],
             'role_updated' => $role['updated'],
             'grants_added' => $grantsAdded,
             'grants_removed' => $grantsRemoved,
-        ];
-    }
-
-    /** @return array{permissions_created: int, permissions_updated: int, permissions_unchanged: int} */
-    private function synchronizePermissions(string $token): array
-    {
-        $existingPermissions = $this->permissionManagementService->listPermissions($token)['permissions'] ?? [];
-        $existingByName = collect($existingPermissions)->keyBy('name');
-        $created = 0;
-        $updated = 0;
-
-        foreach ($this->permissionCatalog->customerPermissions() as $name => $description) {
-            $existing = $existingByName->get($name);
-
-            if (! is_array($existing)) {
-                $this->permissionManagementService->createPermission($token, $name, $description);
-                $created++;
-
-                continue;
-            }
-
-            if (($existing['description'] ?? '') !== $description && is_string($existing['id'] ?? null)) {
-                $this->permissionManagementService->updatePermission($token, $existing['id'], $name, $description);
-                $updated++;
-            }
-        }
-
-        return [
-            'permissions_created' => $created,
-            'permissions_updated' => $updated,
-            'permissions_unchanged' => count($this->permissionCatalog->customerPermissions()) - $created - $updated,
         ];
     }
 
