@@ -87,3 +87,29 @@ Override the compiler or plugin locations with `PROTOC_BINARY` and `GRPC_PHP_PLU
 Login calls `AuthenticationService.Login`, stores the resulting token in the Laravel session, then checks `admin.dashboard.view`. Protected routes ask `AuthorizationService.CheckPermission` for their required permission. A denied permission returns 403; an expired/unauthenticated token clears the session and redirects to login; service availability failures return 503. Logout attempts remote token revocation and always clears the local session. Product, category, image, and order requests use `COMMERCE_GRPC_HOST`; uploads are forwarded to the product service, which stores their bytes in PostgreSQL.
 
 For route details, see `routes/web.php`. The `/up` health route is provided by Laravel. Application and RPC logs are written under `storage/logs` by the default local logging configuration.
+
+## Permission catalog
+
+The admin app checks the following permission names through the auth service. A request must have every permission attached to its route; an active role granting `*` satisfies every check.
+
+| Permission | Used for |
+| --- | --- |
+| `admin.dashboard.view` | Open the admin dashboard and complete login's post-authentication access check. |
+| `users.read` | View users and user details; required alongside role permissions to assign or remove a user's roles. |
+| `users.manage` | Create, edit, and delete users. |
+| `roles.manage` | View and manage roles; required alongside `permissions.manage` to view role permission details and grant or revoke role permissions. |
+| `roles.assign` | Assign or remove roles from users. |
+| `permissions.manage` | View, create, edit, and delete permissions. |
+| `products.read` | View products and product details. |
+| `products.manage` | Create, edit, and delete products, product details, and product images. |
+| `categories.read` | View categories and choose a category while editing products. |
+| `orders.read` | View orders and order details. |
+| `orders.manage` | Change order status. |
+| `merchants.read` | Open the merchants placeholder page. |
+| `customers.read` | Open the customers placeholder page. |
+| `inventory.read` | Open the inventory placeholder page. |
+| `reports.read` | Open the reports placeholder page. |
+| `settings.manage` | Open the settings placeholder page. |
+| `audit_logs.read` | Open the audit logs placeholder page. |
+
+Seed or synchronize these permission records from the Permissions page with **Sync application permissions**. The action uses the logged-in user's session and requires `permissions.manage`; it creates missing records and synchronizes descriptions. It does not assign permissions to roles.

@@ -26,15 +26,15 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
         ->name('dashboard');
 
     Route::prefix('users')->name('users.')->group(function (): void {
-        Route::get('/', [UserController::class, 'index'])->middleware('permission:users.read')->name('index');
-        Route::get('/create', [UserController::class, 'create'])->middleware('permission:users.manage')->name('create');
-        Route::post('/', [UserController::class, 'store'])->middleware('permission:users.manage')->name('store');
+        Route::get('/', [UserController::class, 'index'])->middleware('permission:users.view_all')->name('index');
+        Route::get('/create', [UserController::class, 'create'])->middleware('permission:users.create')->name('create');
+        Route::post('/', [UserController::class, 'store'])->middleware('permission:users.create')->name('store');
         Route::get('/{userId}', [UserController::class, 'show'])
             ->whereUuid('userId')
             ->middleware(['permission:users.read', 'permission:roles.manage'])
             ->name('show');
-        Route::put('/{userId}', [UserController::class, 'update'])->whereUuid('userId')->middleware('permission:users.manage')->name('update');
-        Route::delete('/{userId}', [UserController::class, 'destroy'])->whereUuid('userId')->middleware('permission:users.manage')->name('destroy');
+        Route::put('/{userId}', [UserController::class, 'update'])->whereUuid('userId')->middleware('permission:users.update')->name('update');
+        Route::delete('/{userId}', [UserController::class, 'destroy'])->whereUuid('userId')->middleware('permission:users.delete')->name('destroy');
         Route::post('/{userId}/roles', [UserController::class, 'assignRole'])
             ->whereUuid('userId')
             ->middleware(['permission:users.read', 'permission:roles.manage', 'permission:roles.assign'])
@@ -69,37 +69,38 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
         Route::get('/', [PermissionController::class, 'index'])->name('index');
         Route::get('/create', [PermissionController::class, 'create'])->name('create');
         Route::post('/', [PermissionController::class, 'store'])->name('store');
+        Route::post('/seed', [PermissionController::class, 'seed'])->name('seed');
         Route::put('/{permissionId}', [PermissionController::class, 'update'])->whereUuid('permissionId')->name('update');
         Route::delete('/{permissionId}', [PermissionController::class, 'destroy'])->whereUuid('permissionId')->name('destroy');
     });
 
     Route::prefix('products')->name('products.')->group(function (): void {
-        Route::get('/', [ProductController::class, 'index'])->middleware(['permission:products.read', 'permission:categories.read'])->name('index');
-        Route::get('/create', [ProductController::class, 'create'])->middleware(['permission:products.manage', 'permission:categories.read'])->name('create');
-        Route::post('/', [ProductController::class, 'store'])->middleware('permission:products.manage')->name('store');
-        Route::get('/{productId}/edit', [ProductController::class, 'edit'])->whereUuid('productId')->middleware(['permission:products.manage', 'permission:products.read', 'permission:categories.read'])->name('edit');
-        Route::put('/{productId}', [ProductController::class, 'update'])->whereUuid('productId')->middleware('permission:products.manage')->name('update');
-        Route::delete('/{productId}', [ProductController::class, 'destroy'])->whereUuid('productId')->middleware('permission:products.manage')->name('destroy');
-        Route::put('/{productId}/details', [ProductController::class, 'saveDetails'])->whereUuid('productId')->middleware(['permission:products.manage', 'permission:products.read'])->name('details.update');
-        Route::delete('/{productId}/details', [ProductController::class, 'deleteDetails'])->whereUuid('productId')->middleware('permission:products.manage')->name('details.destroy');
-        Route::post('/{productId}/images', [ProductController::class, 'storeImage'])->whereUuid('productId')->middleware('permission:products.manage')->name('images.store');
-        Route::put('/{productId}/images/{imageId}', [ProductController::class, 'updateImage'])->whereUuid('productId')->whereUuid('imageId')->middleware('permission:products.manage')->name('images.update');
-        Route::delete('/{productId}/images/{imageId}', [ProductController::class, 'deleteImage'])->whereUuid('productId')->whereUuid('imageId')->middleware('permission:products.manage')->name('images.destroy');
+        Route::get('/', [ProductController::class, 'index'])->middleware(['permission:products.view_all', 'permission:categories.view_all'])->name('index');
+        Route::get('/create', [ProductController::class, 'create'])->middleware(['permission:products.create', 'permission:categories.view_all'])->name('create');
+        Route::post('/', [ProductController::class, 'store'])->middleware('permission:products.create')->name('store');
+        Route::get('/{productId}/edit', [ProductController::class, 'edit'])->whereUuid('productId')->middleware(['permission:products.update', 'permission:products.read', 'permission:categories.view_all'])->name('edit');
+        Route::put('/{productId}', [ProductController::class, 'update'])->whereUuid('productId')->middleware('permission:products.update')->name('update');
+        Route::delete('/{productId}', [ProductController::class, 'destroy'])->whereUuid('productId')->middleware('permission:products.delete')->name('destroy');
+        Route::put('/{productId}/details', [ProductController::class, 'saveDetails'])->whereUuid('productId')->middleware(['permission:products.update', 'permission:products.read'])->name('details.update');
+        Route::delete('/{productId}/details', [ProductController::class, 'deleteDetails'])->whereUuid('productId')->middleware('permission:products.update')->name('details.destroy');
+        Route::post('/{productId}/images', [ProductController::class, 'storeImage'])->whereUuid('productId')->middleware('permission:products.update')->name('images.store');
+        Route::put('/{productId}/images/{imageId}', [ProductController::class, 'updateImage'])->whereUuid('productId')->whereUuid('imageId')->middleware('permission:products.update')->name('images.update');
+        Route::delete('/{productId}/images/{imageId}', [ProductController::class, 'deleteImage'])->whereUuid('productId')->whereUuid('imageId')->middleware('permission:products.update')->name('images.destroy');
     });
 
     Route::prefix('categories')->name('categories.')->group(function (): void {
-        Route::get('/', [CategoryController::class, 'index'])->middleware('permission:categories.read')->name('index');
-        Route::get('/create', [CategoryController::class, 'create'])->middleware(['permission:categories.manage', 'permission:categories.read'])->name('create');
-        Route::post('/', [CategoryController::class, 'store'])->middleware('permission:categories.manage')->name('store');
-        Route::get('/{categoryId}/edit', [CategoryController::class, 'edit'])->whereUuid('categoryId')->middleware(['permission:categories.manage', 'permission:categories.read'])->name('edit');
-        Route::put('/{categoryId}', [CategoryController::class, 'update'])->whereUuid('categoryId')->middleware('permission:categories.manage')->name('update');
-        Route::delete('/{categoryId}', [CategoryController::class, 'destroy'])->whereUuid('categoryId')->middleware('permission:categories.manage')->name('destroy');
+        Route::get('/', [CategoryController::class, 'index'])->middleware('permission:categories.view_all')->name('index');
+        Route::get('/create', [CategoryController::class, 'create'])->middleware(['permission:categories.create', 'permission:categories.view_all'])->name('create');
+        Route::post('/', [CategoryController::class, 'store'])->middleware('permission:categories.create')->name('store');
+        Route::get('/{categoryId}/edit', [CategoryController::class, 'edit'])->whereUuid('categoryId')->middleware(['permission:categories.update', 'permission:categories.read'])->name('edit');
+        Route::put('/{categoryId}', [CategoryController::class, 'update'])->whereUuid('categoryId')->middleware('permission:categories.update')->name('update');
+        Route::delete('/{categoryId}', [CategoryController::class, 'destroy'])->whereUuid('categoryId')->middleware('permission:categories.delete')->name('destroy');
     });
 
     Route::prefix('orders')->name('orders.')->group(function (): void {
-        Route::get('/', [OrderController::class, 'index'])->middleware('permission:orders.read')->name('index');
+        Route::get('/', [OrderController::class, 'index'])->middleware('permission:orders.view_all')->name('index');
         Route::get('/{orderId}', [OrderController::class, 'show'])->whereUuid('orderId')->middleware('permission:orders.read')->name('show');
-        Route::put('/{orderId}/status', [OrderController::class, 'updateStatus'])->whereUuid('orderId')->middleware('permission:orders.manage')->name('status');
+        Route::put('/{orderId}/status', [OrderController::class, 'updateStatus'])->whereUuid('orderId')->middleware('permission:orders.update')->name('status');
     });
 
     $sections = [

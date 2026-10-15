@@ -44,6 +44,43 @@ class PermissionController extends Controller
         return redirect()->route('admin.permissions.index')->with('status', 'Permission created.');
     }
 
+    public function seed(Request $request, PermissionCatalog $permissionCatalog, PermissionManagementService $permissionManagementService): RedirectResponse
+    {
+        try {
+            $token = $this->accessToken($request);
+            $existingPermissions = $permissionManagementService->listPermissions($token)['permissions'] ?? [];
+            $existingByName = collect($existingPermissions)->keyBy('name');
+            $permissions = $permissionCatalog->checked();
+            $created = 0;
+            $updated = 0;
+
+            foreach ($permissions as $name => $description) {
+                $existing = $existingByName->get($name);
+
+                if (! is_array($existing)) {
+                    $permissionManagementService->createPermission($token, $name, $description);
+                    $created++;
+
+                    continue;
+                }
+
+                if (($existing['description'] ?? '') !== $description && is_string($existing['id'] ?? null)) {
+                    $permissionManagementService->updatePermission($token, $existing['id'], $name, $description);
+                    $updated++;
+                }
+            }
+        } catch (RuntimeException) {
+            return back()->withErrors(['permission' => 'Application permissions could not be synchronized. Please try again.']);
+        }
+
+        $unchanged = count($permissions) - $created - $updated;
+
+        return redirect()->route('admin.permissions.index')->with(
+            'status',
+            "Application permissions synchronized. Created: {$created}; updated: {$updated}; unchanged: {$unchanged}.",
+        );
+    }
+
     public function update(Request $request, string $permissionId, PermissionManagementService $permissionManagementService, PermissionCatalog $permissionCatalog): RedirectResponse
     {
         $validated = $request->validate([
