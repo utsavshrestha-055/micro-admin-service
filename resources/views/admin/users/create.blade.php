@@ -4,7 +4,7 @@
     <section class="max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/30 sm:p-8">
         <p class="text-sm text-slate-500">Identity and access</p>
         <h2 class="mt-1 text-2xl font-semibold tracking-tight">Create a user</h2>
-        <p class="mt-2 text-sm leading-6 text-slate-500">The account will be created through the authentication service and assigned its default user role.</p>
+        <p class="mt-2 text-sm leading-6 text-slate-500">The account will be created through the authentication service and assigned only the customer role. Sync customer access before creating customer accounts.</p>
         <form class="mt-6 space-y-5" method="POST" action="{{ route('admin.users.store') }}">
             @csrf
             <div class="grid gap-4 sm:grid-cols-2">

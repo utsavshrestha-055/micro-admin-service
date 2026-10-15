@@ -27,8 +27,12 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
 
     Route::prefix('users')->name('users.')->group(function (): void {
         Route::get('/', [UserController::class, 'index'])->middleware('permission:users.view_all')->name('index');
-        Route::get('/create', [UserController::class, 'create'])->middleware('permission:users.create')->name('create');
-        Route::post('/', [UserController::class, 'store'])->middleware('permission:users.create')->name('store');
+        Route::get('/create', [UserController::class, 'create'])
+            ->middleware(['permission:users.create', 'permission:users.read', 'permission:roles.assign'])
+            ->name('create');
+        Route::post('/', [UserController::class, 'store'])
+            ->middleware(['permission:users.create', 'permission:users.read', 'permission:roles.assign'])
+            ->name('store');
         Route::get('/{userId}', [UserController::class, 'show'])
             ->whereUuid('userId')
             ->middleware(['permission:users.read', 'permission:roles.manage'])
@@ -48,6 +52,9 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
     Route::prefix('roles')->name('roles.')->middleware('permission:roles.manage')->group(function (): void {
         Route::get('/', [RoleController::class, 'index'])->name('index');
         Route::post('/sync', [RoleController::class, 'sync'])->name('sync');
+        Route::post('/sync-customer', [RoleController::class, 'syncCustomer'])
+            ->middleware('permission:permissions.manage')
+            ->name('sync-customer');
         Route::get('/create', [RoleController::class, 'create'])->name('create');
         Route::post('/', [RoleController::class, 'store'])->name('store');
         Route::get('/{roleId}', [RoleController::class, 'show'])

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\Authorization\CustomerRoleSeeder;
 use App\Services\Authorization\RoleManagementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -92,6 +93,31 @@ class RoleController extends Controller
         return redirect()->route('admin.roles.index')->with(
             'status',
             "Application roles synchronized. Created: {$created}; updated: {$updated}; unchanged: {$unchanged}.",
+        );
+    }
+
+    public function syncCustomer(Request $request, CustomerRoleSeeder $customerRoleSeeder): RedirectResponse
+    {
+        try {
+            $result = $customerRoleSeeder->synchronize($this->accessToken($request));
+        } catch (RuntimeException) {
+            return back()->withErrors([
+                'role' => 'Customer role access could not be synchronized. Re-run the sync after checking authorization service access.',
+            ]);
+        }
+
+        return redirect()->route('admin.roles.index')->with(
+            'status',
+            sprintf(
+                'Customer access synchronized. Permissions created: %d; updated: %d; unchanged: %d. Role created: %s; updated: %s. Grants added: %d; removed: %d.',
+                $result['permissions_created'],
+                $result['permissions_updated'],
+                $result['permissions_unchanged'],
+                $result['role_created'] ? 'yes' : 'no',
+                $result['role_updated'] ? 'yes' : 'no',
+                $result['grants_added'],
+                $result['grants_removed'],
+            ),
         );
     }
 

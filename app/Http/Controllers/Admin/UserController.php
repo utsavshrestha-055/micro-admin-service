@@ -62,6 +62,7 @@ class UserController extends Controller
 
         try {
             $userManagementService->createUser(
+                $this->accessToken($request),
                 $validated['email'],
                 $validated['password'],
                 $validated['first_name'],
@@ -69,7 +70,7 @@ class UserController extends Controller
             );
         } catch (RuntimeException) {
             return back()
-                ->withErrors(['user' => 'The user could not be created. Check whether the email is already registered.'])
+                ->withErrors(['user' => 'The customer account could not be created or assigned customer access. Check the email and synchronize customer access before retrying.'])
                 ->withInput($request->except(['password', 'password_confirmation']));
         }
 

@@ -33,6 +33,8 @@ class PermissionCatalog
             'merchants.read' => 'View merchants when the merchant service is connected',
             'merchants.manage' => 'Manage merchants when the merchant service is connected',
             'orders.read' => 'View customer orders',
+            'orders.create' => 'Create orders for the signed-in customer',
+            'orders.cancel' => 'Cancel eligible orders owned by the signed-in customer',
             'orders.view_all' => 'View all customer orders',
             'orders.update' => 'Update customer order statuses',
             'orders.manage' => 'Update customer order statuses',
@@ -71,6 +73,8 @@ class PermissionCatalog
             'categories.update',
             'categories.delete',
             'orders.read',
+            'orders.create',
+            'orders.cancel',
             'orders.view_all',
             'orders.update',
             'orders.manage',
@@ -80,6 +84,18 @@ class PermissionCatalog
             'reports.read',
             'settings.manage',
             'audit_logs.read',
+        ]));
+    }
+
+    /** @return array<string, string> */
+    public function customerPermissions(): array
+    {
+        return array_intersect_key($this->all(), array_flip([
+            'products.read',
+            'categories.read',
+            'orders.read',
+            'orders.create',
+            'orders.cancel',
         ]));
     }
 }

@@ -21,27 +21,54 @@ class UserManagementService
     }
 
     /** @return array<string, mixed> */
-    public function createUser(string $email, string $password, string $firstName, string $lastName): array
+    public function createUser(string $token, string $email, string $password, string $firstName, string $lastName): array
     {
         $response = $this->authenticationClient->register($email, $password, $firstName, $lastName);
         $createdUser = $response['user'] ?? null;
         $createdUserToken = $response['access_token'] ?? null;
 
-        if (is_string($createdUserToken) && $createdUserToken !== '') {
-            try {
-                $this->authenticationClient->logout($createdUserToken);
-            } catch (RuntimeException $exception) {
-                Log::notice('The newly created user session could not be revoked.', [
-                    'reason' => class_basename($exception),
-                ]);
-            }
+        if (! is_string($createdUserToken) || $createdUserToken === '') {
+            throw new RuntimeException('The authentication service returned an invalid registration session.');
         }
 
         if (! is_array($createdUser) || ! isset($createdUser['id'], $createdUser['email'])) {
+            $this->revokeCreatedUserSession($createdUserToken);
+
             throw new RuntimeException('The authentication service returned an invalid registration response.');
         }
 
+        try {
+            $this->authorizationClient->assignRole($token, (string) $createdUser['id'], 'customer');
+            $assignedRoles = $this->authorizationClient->listUserRoles($token, (string) $createdUser['id'])['values'] ?? [];
+
+            foreach ($assignedRoles as $role) {
+                if (! is_string($role) || $role === 'customer') {
+                    continue;
+                }
+
+                $this->authorizationClient->unassignRole($token, (string) $createdUser['id'], $role);
+            }
+        } catch (RuntimeException $exception) {
+            throw new RuntimeException(
+                'The account was created, but customer access could not be assigned. Synchronize customer access and repair the account roles before retrying.',
+                previous: $exception,
+            );
+        } finally {
+            $this->revokeCreatedUserSession($createdUserToken);
+        }
+
         return $createdUser;
+    }
+
+    private function revokeCreatedUserSession(string $token): void
+    {
+        try {
+            $this->authenticationClient->logout($token);
+        } catch (RuntimeException $exception) {
+            Log::notice('The newly created user session could not be revoked.', [
+                'reason' => class_basename($exception),
+            ]);
+        }
     }
 
     /** @return array<string, mixed> */
