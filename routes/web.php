@@ -47,6 +47,7 @@ Route::middleware('admin.auth')->prefix('admin')->name('admin.')->group(function
 
     Route::prefix('roles')->name('roles.')->middleware('permission:roles.manage')->group(function (): void {
         Route::get('/', [RoleController::class, 'index'])->name('index');
+        Route::post('/sync', [RoleController::class, 'sync'])->name('sync');
         Route::get('/create', [RoleController::class, 'create'])->name('create');
         Route::post('/', [RoleController::class, 'store'])->name('store');
         Route::get('/{roleId}', [RoleController::class, 'show'])

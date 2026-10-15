@@ -11,6 +11,12 @@ use RuntimeException;
 
 class RoleController extends Controller
 {
+    /** @var array<string, string> */
+    private const APPLICATION_ROLES = [
+        'admin' => 'Administrator role for the administration panel',
+        'customer' => 'Customer role for customer accounts',
+    ];
+
     public function index(Request $request, RoleManagementService $roleManagementService): View
     {
         try {
@@ -45,6 +51,48 @@ class RoleController extends Controller
         return is_string($roleId)
             ? redirect()->route('admin.roles.show', $roleId)->with('status', 'Role created.')
             : redirect()->route('admin.roles.index')->with('status', 'Role created.');
+    }
+
+    public function sync(Request $request, RoleManagementService $roleManagementService): RedirectResponse
+    {
+        try {
+            $token = $this->accessToken($request);
+            $existingRoles = $roleManagementService->listRoles($token)['roles'] ?? [];
+            $existingByName = collect($existingRoles)->keyBy('name');
+            $created = 0;
+            $updated = 0;
+
+            foreach (self::APPLICATION_ROLES as $name => $description) {
+                $role = $existingByName->get($name);
+
+                if (! is_array($role)) {
+                    $roleManagementService->createRole($token, $name, $description);
+                    $created++;
+
+                    continue;
+                }
+
+                if (($role['description'] ?? '') !== $description && is_string($role['id'] ?? null)) {
+                    $roleManagementService->updateRole(
+                        $token,
+                        $role['id'],
+                        $name,
+                        $description,
+                        (bool) ($role['is_active'] ?? false),
+                    );
+                    $updated++;
+                }
+            }
+        } catch (RuntimeException) {
+            return back()->withErrors(['role' => 'Application roles could not be synchronized. Please try again.']);
+        }
+
+        $unchanged = count(self::APPLICATION_ROLES) - $created - $updated;
+
+        return redirect()->route('admin.roles.index')->with(
+            'status',
+            "Application roles synchronized. Created: {$created}; updated: {$updated}; unchanged: {$unchanged}.",
+        );
     }
 
     public function show(Request $request, string $roleId, RoleManagementService $roleManagementService): View
